@@ -371,7 +371,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """
         Return short link for recipe.
         """
-        recipe = get_object_or_404(Recipe, pk=pk)
+        get_object_or_404(Recipe, pk=pk)
         short_link = request.build_absolute_uri(
             reverse(
                 'api:recipes-detail',
