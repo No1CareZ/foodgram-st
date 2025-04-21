@@ -31,7 +31,7 @@ python manage.py populate_ingredients ingredients.json
 python manage.py runserver
 ```
 
-## Интсрументарий
+## Инструментарий
 * `Django`
 * `DRF`
 * `Djoser`
