@@ -151,15 +151,6 @@ class RecipeSerializer(serializers.ModelSerializer):
         is_favorited.
         """
         return self._get_is_template(obj, 'favorites')
-        # request = self.context.get('request')
-        # user = request.user
-
-        # return (
-        #     user.is_authenticated
-        #     and user.fav.filter(
-        #         recipes=obj.pk
-        #     ).exists()
-        # )
 
     def get_is_in_shopping_cart(self, obj):
         """
@@ -168,15 +159,6 @@ class RecipeSerializer(serializers.ModelSerializer):
         """
 
         return self._get_is_template(obj, 'tobuylists')
-        # request = self.context.get('request')
-        # user = request.user
-
-        # return (
-        #     user.is_authenticated
-        #     and request.user.buylist.filter(
-        #         recipes=obj.pk
-        #     ).exists()
-        # )
 
 
 class CutRecipeSerializer(serializers.ModelSerializer):
@@ -351,7 +333,6 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         ingredients = validated_data.pop("ingredients")
         author = self.context['request'].user
         recipe = Recipe.objects.create(author=author, **validated_data)
-        # recipe = super().create(validated_data)
         self.create_ingredients(ingredients, recipe)
 
         return recipe

@@ -1,6 +1,6 @@
 import os
 
-from django.contrib.auth.models import AbstractUser  # , Group, Permission
+from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator, MinValueValidator
 from django.db import models
 
@@ -46,22 +46,6 @@ class User(AbstractUser):
         upload_to='media/avatars/',
         verbose_name='Изображение профиля'
     )
-
-    # groups = models.ManyToManyField(
-    #     Group,
-    #     related_name='users',
-    #     related_query_name='user',
-    #     blank=True,
-    #     verbose_name='Группы',
-    # )
-
-    # user_permissions = models.ManyToManyField(
-    #     Permission,
-    #     related_name='users',
-    #     related_query_name='user',
-    #     blank=True,
-    #     verbose_name='Разрешения',
-    # )
 
     class Meta:
         verbose_name = 'Пользователь'

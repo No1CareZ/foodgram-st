@@ -186,64 +186,20 @@ class RecipeViewSet(viewsets.ModelViewSet):
         filters.SearchFilter,
     )
     filterset_class = RecipeFilter
-    # search_fields = ('=author', 'is_favorited', 'is_in_shopping_cart')
-
-    # def get_queryset(self):
-    #     queryset = super().get_queryset()
-    #     author = self.request.query_params.get(
-    #         'author'
-    #     )
-    #     is_favorited = self.request.query_params.get(
-    #         'is_favorited'
-    #     )
-    #     is_in_shopping_cart = self.request.query_params.get(
-    #         'is_in_shopping_cart'
-    #     )
-
-    #     if author:
-    #         queryset = queryset.filter(author=author)
-    #     if is_favorited and self.request.user.is_authenticated:
-    #         queryset = queryset.filter(fav__user=self.request.user)
-    #     if is_in_shopping_cart and self.request.user.is_authenticated:
-    #         queryset = queryset.filter(buylist__user=self.request.user)
-    #     return queryset
 
     def get_serializer_class(self):
         if self.action not in SAFE_METHODS:
-        #if self.action == 'create' or self.action == 'partial_update':
             return CreateRecipeSerializer
         else:
             return RecipeSerializer
 
-    # def get_permissions(self):
-    #     if self.action == 'create' or self.action == 'partial_update':
-    #         permission_classes = (
-    #             permissions.IsAuthenticated,
-    #             IsAuthorOrReadOnlyPermission
-    #         )
-    #     else:
-    #         permission_classes = (IsAuthorOrReadOnlyPermission, )
-    #     return [permission() for permission in permission_classes]
-
-    # def perform_create(self, serializer):
-    #     serializer.save(
-    #         author=self.request.user
-    #     )
-
     def actions_recipe(self, request, pk, model, error_message):
-        # if not request.user.is_authenticated:
-        #     return Response(
-        #         status=status.HTTP_401_UNAUTHORIZED
-        #     )
-
         recipe = get_object_or_404(
             Recipe,
             pk=pk
         )
 
         if request.method == 'POST':
-            
-
             collection, created = model.objects.get_or_create(
                 user=request.user,
                 recipes=recipe,
@@ -295,24 +251,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
         permission_classes=(permissions.IsAuthenticated,)
     )
     def favorite(self, request, pk):
-        # if request.method == 'DELETE':
-        #     is_in_fav = Favorite.objects.all()\
-        #         .filter(recipes__pk=pk)\
-        #         .filter(user=request.user)
-        #     is_exsists = Recipe.objects.filter(pk=pk).exists()
-
-        #     if not is_in_fav and is_exsists:
-        #         return Response(
-        #             status=status.HTTP_400_BAD_REQUEST
-        #         )
-
-        # return self.actions_recipe(
-        #     request,
-        #     pk,
-        #     Favorite,
-        #     'Recipe was already favorited!'
-        # )
-
         return self._fav_and_cart(
             request,
             pk,
@@ -328,22 +266,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
         permission_classes=(permissions.IsAuthenticated,)
     )
     def shopping_cart(self, request, pk):
-        # if request.method == 'DELETE':
-        #     is_in_cart = ToBuyList.objects.all()\
-        #         .filter(recipes__pk=pk)\
-        #         .filter(user=request.user)
-        #     is_exsists = Recipe.objects.filter(pk=pk).exists()
-
-        #     if not is_in_cart and is_exsists:
-        #         return Response(
-        #             status=status.HTTP_400_BAD_REQUEST
-        #         )
-        # return self.actions_recipe(
-        #     request,
-        #     pk,
-        #     ToBuyList,
-        #     'Recipe is already in the cart'
-        # )
         return self._fav_and_cart(
             request,
             pk,
@@ -399,45 +321,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
             'recipes__recipe_ingredient__ingredient__name'
         )
 
-
-        # recipes = request.user.buylist.all()
-
-        # file_head = (
-        #     f'Список покупок {request.user.username}'
-        #     + f' ({datetime.datetime.now()}) - \n'
-        # )
-
-        # file_ingredients = (
-        #     'Ингридиенты:\n'
-        #     + '\n'.join(
-        #         f'''{i}. {ingredient[
-        #             'recipes__recipe_ingredient__ingredient__name'
-        #         ].capitalize()} '''
-        #         f'''({ingredient[
-        #             'recipes__recipe_ingredient__ingredient__measurement_unit'
-        #         ]})'''
-        #         f''' - {ingredient['total']}'''
-        #         for i, ingredient in enumerate(ingredients, start=1)
-        #     )
-        # )
-
-        # file_recipes = (
-        #     'Рецепты:\n'
-        #     + '\n'.join(
-        #         f'''{i}. {recipe.recipes.name} от '''
-        #         f'''{recipe.recipes.author}'''
-        #         for i, recipe in enumerate(recipes, start=1)
-        #     )
-        # )
-
-        # file_content = '\n'.join([
-        #     file_head,
-        #     file_ingredients,
-        #     # file_recipes
-        # ])
-
-        # file_content = io.BytesIO(file_content.encode('utf-8'))
-
         return FileResponse(
             self._download_file(
                 request=request,
@@ -484,10 +367,3 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ('=name',)
 
     pagination_class = None
-
-    # def get_queryset(self):
-    #     queryset = super().get_queryset()
-    #     name = self.request.query_params.get('name')
-    #     if name:
-    #         queryset = queryset.filter(name__istartswith=name)
-    #     return queryset
