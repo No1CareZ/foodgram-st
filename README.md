@@ -7,11 +7,28 @@
 
 -- описание взято с курса Яндекс Практикум: Python бэкенд-разработчик
 ## Запуск
+### Используя Docker
 ```bash
 cd .\infra\
 ```
 ```bash
 docker compose up
+```
+### Debug/No Docker
+```bash
+cd .\backend\
+```
+```bash
+python manage.py makemigrations
+```
+```bash
+python manage.py migrate
+```
+```bash
+python manage.py populate_ingredients ingredients.json
+```
+```bash
+python manage.py runserver
 ```
 
 ## Интсрументарий

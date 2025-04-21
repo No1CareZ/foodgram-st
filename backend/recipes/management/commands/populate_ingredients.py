@@ -1,8 +1,14 @@
+import os
 import json
+from tqdm import tqdm
+from dotenv import load_dotenv, find_dotenv
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from recipes.models import Ingredient
+
+
+load_dotenv(find_dotenv())
 
 
 class Command(BaseCommand):
@@ -15,24 +21,28 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         file_name = options['json_file']
         try:
-            path = settings.BASE_DIR / 'data_copy' / file_name
+            path = settings.BASE_DIR / os.getenv('data_copy_path') / file_name
             with open(path, encoding='utf-8') as file:
                 ingredients = json.load(file)
-                for i in ingredients:
+                for ingredient in tqdm(
+                    ingredients,
+                    desc="Adding ingredients",
+                    unit="ingredient"
+                ):
                     Ingredient.objects.create(
-                        name=i.get('name'),
-                        measurement_unit=i.get('measurement_unit'),
+                        name=ingredient.get('name'),
+                        measurement_unit=ingredient.get('measurement_unit'),
                     )
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f'Загружен файл {file_name} на: {len(ingredients)}'
+                    f'File named {file_name} has: {len(ingredients)}'
                 ))
 
         except Exception as e:
             self.stdout.write(
                 self.style.ERROR(
-                    f'Загрузка окнчена с ошибкой! \
-                    Файл {file_name} не загружен: {e}'
+                    f'''Error! File named {file_name}'''
+                    + f''' faild to load: {e}'''
                 )
             )

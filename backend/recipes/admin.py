@@ -1,16 +1,23 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.safestring import mark_safe
 
-from .models import CustomUser, \
-    SubPair, Ingredient, Recipe, \
-    ToBuyList, Favorite
+from .models import (
+    User,
+    SubPair,
+    Ingredient,
+    Recipe,
+    ToBuyList,
+    Favorite
+)
 
 
-@admin.register(CustomUser)
-class CustomUserAdmin(admin.ModelAdmin):
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
     """
-    Class to add CustomUser to admin.
+    Class to add User to admin.
     """
+
     list_display = (
         'pk',
         'email',
@@ -30,16 +37,17 @@ class SubPairAdmin(admin.ModelAdmin):
     """
     Class to add SubPair to admin.
     """
+
     list_display = (
         'pk',
         'subscriber',
-        'contentmaker'
+        'content_maker'
     )
     search_fields = (
         'subscriber__username',
-        'contentmaker__username',
+        'content_maker__username',
         'subscriber__email',
-        'contentmaker__email'
+        'content_maker__email'
     )
 
 
@@ -48,6 +56,7 @@ class IngredientAdmin(admin.ModelAdmin):
     """
     Class to add Ingredient to admin.
     """
+
     list_display = (
         'pk',
         'name',
@@ -63,6 +72,7 @@ class RecipeAdmin(admin.ModelAdmin):
     """
     Class to add Recipe to admin.
     """
+
     list_display = (
         'pk',
         'name',
@@ -84,6 +94,7 @@ class RecipeAdmin(admin.ModelAdmin):
         Return safe-string with information of amount, MU and
         name of the ingredient.
         """
+
         in_obj = obj.recipe_ingredient.all()
         safe_str = mark_safe(
             '<br>'.join(
@@ -102,6 +113,7 @@ class RecipeAdmin(admin.ModelAdmin):
         Get count of haow may times
         this recpie was add into Favorite.
         """
+
         return obj.fav.count()
 
 
@@ -110,6 +122,7 @@ class ToBuyListAdmin(admin.ModelAdmin):
     """
     Class to add ToBuyList to admin.
     """
+
     list_display = (
         'pk',
         'user',
@@ -122,6 +135,7 @@ class FavoriteAdmin(admin.ModelAdmin):
     """
     Class to add Favorite to admin.
     """
+
     list_display = (
         'pk',
         'user',

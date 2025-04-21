@@ -1,25 +1,41 @@
 import io
 import datetime
 
-from rest_framework import filters, viewsets, permissions, status
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
 from django.http import FileResponse
 from django.db.models import Sum
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404, reverse
-from djoser import views
 from django_filters import rest_framework
+from rest_framework import filters, viewsets, permissions, status
+from rest_framework.permissions import SAFE_METHODS, IsAuthenticatedOrReadOnly
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 
+from djoser import views
 
 from recipes.models import Ingredient
-from recipes.models import SubPair, Recipe, ToBuyList, \
+from recipes.models import (
+    SubPair,
+    Recipe,
+    ToBuyList,
     Favorite
+)
 
-from .serializers import IngredientSerializer, AvatarSerializer, \
-    SubscriberSerializer, CreateRecipeSerializer, RecipeSerializer, \
+from .serializers import (
+    IngredientSerializer,
+    AvatarSerializer,
+    SubscriberSerializer,
+    CreateRecipeSerializer,
+    RecipeSerializer,
     CutRecipeSerializer
+)
+
+from .filters import (
+    RecipeFilter,
+    IngredientFilter
+)
+
 from .permissions import IsAuthorOrReadOnlyPermission
 
 
@@ -30,6 +46,7 @@ class UserViewSet(views.UserViewSet):
     """
     CRUD allowing viewset for User.
     """
+
     permission_classes = (IsAuthorOrReadOnlyPermission, )
 
     page_size_query_param = ('limit',)
@@ -67,13 +84,12 @@ class UserViewSet(views.UserViewSet):
             return Response(
                 status=status.HTTP_400_BAD_REQUEST
             )
-        elif request.method == 'DELETE':
-            user.avatar.delete(save=True)
-            user.avatar = None
-            user.save()
-            return Response(
-                status=status.HTTP_204_NO_CONTENT
-            )
+        user.avatar.delete(save=True)
+        user.avatar = None
+        user.save()
+        return Response(
+            status=status.HTTP_204_NO_CONTENT
+        )
 
     @action(
         detail=False,
@@ -97,7 +113,7 @@ class UserViewSet(views.UserViewSet):
         """
         Get subscribed pages.
         """
-        targets = request.user.subscriber.values('contentmaker')
+        targets = request.user.subscribers.values('content_maker')
         queryset = self.get_queryset().filter(
             id__in=targets
         )
@@ -122,20 +138,20 @@ class UserViewSet(views.UserViewSet):
         author = get_object_or_404(User, id=id)
         subscription = SubPair.objects.filter(
             subscriber=user,
-            contentmaker=author
+            content_maker=author
         )
         if request.method == 'POST':
             if user == author:
                 raise ValidationError(
-                    'Вы не можете подписаться сами на себя!'
+                    'You cannot subscribe to yourself!'
                 )
             if subscription.exists():
                 raise ValidationError(
-                    'Вы уже подписаны на этого пользователя!'
+                    'You are already subscribed to this user!'
                 )
             SubPair.objects.create(
                 subscriber=user,
-                contentmaker=author
+                content_maker=author
             )
             serializer = SubscriberSerializer(
                 author,
@@ -145,19 +161,22 @@ class UserViewSet(views.UserViewSet):
                 serializer.data,
                 status=status.HTTP_201_CREATED
             )
-        elif request.method == 'DELETE':
-            subpairsearch = SubPair.objects.all()\
-                .filter(subscriber=user)\
-                .filter(contentmaker=author)
+        subpairsearch = SubPair.objects.all()\
+            .filter(subscriber=user)\
+            .filter(content_maker=author)
 
-            if subpairsearch:
-                subpairsearch[0].delete()
-                return Response(status=status.HTTP_204_NO_CONTENT)
-            else:
-                return Response(status=status.HTTP_400_BAD_REQUEST)
+        if subpairsearch:
+            subpairsearch[0].delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
+    permission_classes = (
+        IsAuthenticatedOrReadOnly,
+        IsAuthorOrReadOnlyPermission,
+    )
+
     page_size_query_param = ('limit',)
 
     queryset = Recipe.objects.all()
@@ -166,54 +185,56 @@ class RecipeViewSet(viewsets.ModelViewSet):
         rest_framework.DjangoFilterBackend,
         filters.SearchFilter,
     )
-    search_fields = ('=author', 'is_favorited', 'is_in_shopping_cart')
+    filterset_class = RecipeFilter
+    # search_fields = ('=author', 'is_favorited', 'is_in_shopping_cart')
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        author = self.request.query_params.get(
-            'author'
-        )
-        is_favorited = self.request.query_params.get(
-            'is_favorited'
-        )
-        is_in_shopping_cart = self.request.query_params.get(
-            'is_in_shopping_cart'
-        )
+    # def get_queryset(self):
+    #     queryset = super().get_queryset()
+    #     author = self.request.query_params.get(
+    #         'author'
+    #     )
+    #     is_favorited = self.request.query_params.get(
+    #         'is_favorited'
+    #     )
+    #     is_in_shopping_cart = self.request.query_params.get(
+    #         'is_in_shopping_cart'
+    #     )
 
-        if author:
-            queryset = queryset.filter(author=author)
-        if is_favorited and self.request.user.is_authenticated:
-            queryset = queryset.filter(fav__user=self.request.user)
-        if is_in_shopping_cart and self.request.user.is_authenticated:
-            queryset = queryset.filter(buylist__user=self.request.user)
-        return queryset
+    #     if author:
+    #         queryset = queryset.filter(author=author)
+    #     if is_favorited and self.request.user.is_authenticated:
+    #         queryset = queryset.filter(fav__user=self.request.user)
+    #     if is_in_shopping_cart and self.request.user.is_authenticated:
+    #         queryset = queryset.filter(buylist__user=self.request.user)
+    #     return queryset
 
     def get_serializer_class(self):
-        if self.action == 'create' or self.action == 'partial_update':
+        if self.action not in SAFE_METHODS:
+        #if self.action == 'create' or self.action == 'partial_update':
             return CreateRecipeSerializer
         else:
             return RecipeSerializer
 
-    def get_permissions(self):
-        if self.action == 'create' or self.action == 'partial_update':
-            permission_classes = (
-                permissions.IsAuthenticated,
-                IsAuthorOrReadOnlyPermission
-            )
-        else:
-            permission_classes = (IsAuthorOrReadOnlyPermission, )
-        return [permission() for permission in permission_classes]
+    # def get_permissions(self):
+    #     if self.action == 'create' or self.action == 'partial_update':
+    #         permission_classes = (
+    #             permissions.IsAuthenticated,
+    #             IsAuthorOrReadOnlyPermission
+    #         )
+    #     else:
+    #         permission_classes = (IsAuthorOrReadOnlyPermission, )
+    #     return [permission() for permission in permission_classes]
 
-    def perform_create(self, serializer):
-        serializer.save(
-            author=self.request.user
-        )
+    # def perform_create(self, serializer):
+    #     serializer.save(
+    #         author=self.request.user
+    #     )
 
     def actions_recipe(self, request, pk, model, error_message):
-        if not request.user.is_authenticated:
-            return Response(
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+        # if not request.user.is_authenticated:
+        #     return Response(
+        #         status=status.HTTP_401_UNAUTHORIZED
+        #     )
 
         recipe = get_object_or_404(
             Recipe,
@@ -221,6 +242,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
         )
 
         if request.method == 'POST':
+            
+
             collection, created = model.objects.get_or_create(
                 user=request.user,
                 recipes=recipe,
@@ -245,6 +268,25 @@ class RecipeViewSet(viewsets.ModelViewSet):
             status=status.HTTP_204_NO_CONTENT
         )
 
+    def _fav_and_cart(self, request, pk, model, error_message):
+        if self.request.method == 'DELETE':
+            is_in_model = model.objects.filter(
+                recipes__pk=pk,
+                user=request.user
+            ).exists()
+            is_exsists = Recipe.objects.filter(pk=pk).exists()
+
+            if not is_in_model and is_exsists:
+                return Response(
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        return self.actions_recipe(
+            request,
+            pk,
+            model,
+            error_message
+        )
+
     @action(
         detail=True,
         methods=('post', 'delete'),
@@ -253,23 +295,29 @@ class RecipeViewSet(viewsets.ModelViewSet):
         permission_classes=(permissions.IsAuthenticated,)
     )
     def favorite(self, request, pk):
-        ###################
-        if request.method == 'DELETE' and request.user.is_authenticated:
-            is_in_fav = Favorite.objects.all()\
-                .filter(recipes__pk=pk)\
-                .filter(user=request.user)
-            is_exsists = Recipe.objects.filter(pk=pk).exists()
+        # if request.method == 'DELETE':
+        #     is_in_fav = Favorite.objects.all()\
+        #         .filter(recipes__pk=pk)\
+        #         .filter(user=request.user)
+        #     is_exsists = Recipe.objects.filter(pk=pk).exists()
 
-            if not is_in_fav and is_exsists:
-                return Response(
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        #     if not is_in_fav and is_exsists:
+        #         return Response(
+        #             status=status.HTTP_400_BAD_REQUEST
+        #         )
 
-        return self.actions_recipe(
+        # return self.actions_recipe(
+        #     request,
+        #     pk,
+        #     Favorite,
+        #     'Recipe was already favorited!'
+        # )
+
+        return self._fav_and_cart(
             request,
             pk,
             Favorite,
-            'Рецепт уже был избран!'
+            'Recipe was already favorited!'
         )
 
     @action(
@@ -280,22 +328,57 @@ class RecipeViewSet(viewsets.ModelViewSet):
         permission_classes=(permissions.IsAuthenticated,)
     )
     def shopping_cart(self, request, pk):
-        if request.method == 'DELETE' and request.user.is_authenticated:
-            is_in_cart = ToBuyList.objects.all()\
-                .filter(recipes__pk=pk)\
-                .filter(user=request.user)
-            is_exsists = Recipe.objects.filter(pk=pk).exists()
+        # if request.method == 'DELETE':
+        #     is_in_cart = ToBuyList.objects.all()\
+        #         .filter(recipes__pk=pk)\
+        #         .filter(user=request.user)
+        #     is_exsists = Recipe.objects.filter(pk=pk).exists()
 
-            if not is_in_cart and is_exsists:
-                return Response(
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        return self.actions_recipe(
+        #     if not is_in_cart and is_exsists:
+        #         return Response(
+        #             status=status.HTTP_400_BAD_REQUEST
+        #         )
+        # return self.actions_recipe(
+        #     request,
+        #     pk,
+        #     ToBuyList,
+        #     'Recipe is already in the cart'
+        # )
+        return self._fav_and_cart(
             request,
             pk,
             ToBuyList,
-            'Рецепт уже в корзине'
+            'Recipe is already in the cart!'
         )
+
+    def _download_file(self, request, ingredients):
+        file_head = (
+            f'Список покупок {request.user.username}'
+            + f' ({datetime.datetime.now()}) - \n'
+        )
+
+        file_ingredients = (
+            'Ингридиенты:\n'
+            + '\n'.join(
+                f'''{i}. {ingredient[
+                    'recipes__recipe_ingredient__ingredient__name'
+                ].capitalize()} '''
+                f'''({ingredient[
+                    'recipes__recipe_ingredient__ingredient__measurement_unit'
+                ]})'''
+                f''' - {ingredient['total']}'''
+                for i, ingredient in enumerate(ingredients, start=1)
+            )
+        )
+
+        file_content = '\n'.join([
+            file_head,
+            file_ingredients,
+        ])
+
+        file_content = io.BytesIO(file_content.encode('utf-8'))
+
+        return file_content
 
     @action(
         detail=False,
@@ -316,46 +399,50 @@ class RecipeViewSet(viewsets.ModelViewSet):
             'recipes__recipe_ingredient__ingredient__name'
         )
 
-        recipes = request.user.buylist.all()
 
-        file_head = (
-            f'Список покупок {request.user.username}'
-            + f' ({datetime.datetime.now()}) - \n'
-        )
+        # recipes = request.user.buylist.all()
 
-        file_ingredients = (
-            'Ингридиенты:\n'
-            + '\n'.join(
-                f'''{i}. {ingredient[
-                    'recipes__recipe_ingredient__ingredient__name'
-                ].capitalize()} '''
-                f'''({ingredient[
-                    'recipes__recipe_ingredient__ingredient__measurement_unit'
-                ]})'''
-                f''' - {ingredient['total']}'''
-                for i, ingredient in enumerate(ingredients, start=1)
-            )
-        )
+        # file_head = (
+        #     f'Список покупок {request.user.username}'
+        #     + f' ({datetime.datetime.now()}) - \n'
+        # )
 
-        file_recipes = (
-            'Рецепты:\n'
-            + '\n'.join(
-                f'''{i}. {recipe.recipes.name} от '''
-                f'''{recipe.recipes.author}'''
-                for i, recipe in enumerate(recipes, start=1)
-            )
-        )
+        # file_ingredients = (
+        #     'Ингридиенты:\n'
+        #     + '\n'.join(
+        #         f'''{i}. {ingredient[
+        #             'recipes__recipe_ingredient__ingredient__name'
+        #         ].capitalize()} '''
+        #         f'''({ingredient[
+        #             'recipes__recipe_ingredient__ingredient__measurement_unit'
+        #         ]})'''
+        #         f''' - {ingredient['total']}'''
+        #         for i, ingredient in enumerate(ingredients, start=1)
+        #     )
+        # )
 
-        file_content = '\n'.join([
-            file_head,
-            file_ingredients,
-            file_recipes
-        ])
+        # file_recipes = (
+        #     'Рецепты:\n'
+        #     + '\n'.join(
+        #         f'''{i}. {recipe.recipes.name} от '''
+        #         f'''{recipe.recipes.author}'''
+        #         for i, recipe in enumerate(recipes, start=1)
+        #     )
+        # )
 
-        file_content = io.BytesIO(file_content.encode('utf-8'))
+        # file_content = '\n'.join([
+        #     file_head,
+        #     file_ingredients,
+        #     # file_recipes
+        # ])
+
+        # file_content = io.BytesIO(file_content.encode('utf-8'))
 
         return FileResponse(
-            file_content,
+            self._download_file(
+                request=request,
+                ingredients=ingredients
+            ),
             as_attachment=True,
             filename='shopping-list.txt',
             content_type='text/plain',
@@ -390,14 +477,17 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
 
-    filter_backends = (filters.SearchFilter,)
+    filter_backends = (
+        filters.SearchFilter,
+    )
+    filterset_class = IngredientFilter
     search_fields = ('=name',)
 
     pagination_class = None
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        name = self.request.query_params.get('name')
-        if name:
-            queryset = queryset.filter(name__istartswith=name)
-        return queryset
+    # def get_queryset(self):
+    #     queryset = super().get_queryset()
+    #     name = self.request.query_params.get('name')
+    #     if name:
+    #         queryset = queryset.filter(name__istartswith=name)
+    #     return queryset

@@ -1,33 +1,44 @@
-from django.db import models
-from django.contrib.auth.models import AbstractUser, Group, Permission
+import os
+
+from django.contrib.auth.models import AbstractUser  # , Group, Permission
 from django.core.validators import RegexValidator, MinValueValidator
+from django.db import models
+
+from dotenv import load_dotenv, find_dotenv
 
 
-class CustomUser(AbstractUser):
+load_dotenv(find_dotenv(filename='config.env'))
+
+
+class User(AbstractUser):
     """
-    Custom User model made from AbstructUser class.
+    User model made from AbstructUser class.
     """
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ('username', 'first_name', 'last_name')
+
     email = models.EmailField(
         verbose_name='Почта',
         unique=True
     )
     username = models.CharField(
-        max_length=150,
+        max_length=int(os.getenv('username_max_length')),
         validators=[
             RegexValidator(
-                regex=r'^[\w.@+-]+$',
-                message='Никнейм должен проходить по правилам!'
+                regex=os.getenv('username_validator_regex'),
+                message='Username must follow the rules!'
             )
         ],
         unique=True,
         verbose_name='Никнейм'
     )
     first_name = models.CharField(
-        max_length=150,
+        max_length=int(os.getenv('fname_max_length')),
         verbose_name='Имя'
     )
     last_name = models.CharField(
-        max_length=150,
+        max_length=int(os.getenv('lname_max_length')),
         verbose_name='Фамилия'
     )
     avatar = models.ImageField(
@@ -36,26 +47,23 @@ class CustomUser(AbstractUser):
         verbose_name='Изображение профиля'
     )
 
-    groups = models.ManyToManyField(
-        Group,
-        related_name='customuser_set',
-        related_query_name='customuser',
-        blank=True,
-        verbose_name='Группы',
-    )
+    # groups = models.ManyToManyField(
+    #     Group,
+    #     related_name='users',
+    #     related_query_name='user',
+    #     blank=True,
+    #     verbose_name='Группы',
+    # )
 
-    user_permissions = models.ManyToManyField(
-        Permission,
-        related_name='customuser_set',
-        related_query_name='customuser',
-        blank=True,
-        verbose_name='Разрешения',
-    )
+    # user_permissions = models.ManyToManyField(
+    #     Permission,
+    #     related_name='users',
+    #     related_query_name='user',
+    #     blank=True,
+    #     verbose_name='Разрешения',
+    # )
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ('username', 'first_name', 'last_name')
-
-    class Meta():
+    class Meta:
         verbose_name = 'Пользователь'
         verbose_name_plural = 'Пользователи'
         ordering = ('email',)
@@ -68,23 +76,24 @@ class SubPair(models.Model):
     """
     Model of Subscribtion pair -
     subscriber a.k.a follower
-    contentmaker a.k. followed.
+    content_maker a.k. followed.
     """
+
     subscriber = models.ForeignKey(
-        CustomUser,
+        User,
         on_delete=models.CASCADE,
-        related_name='subscriber'
+        related_name='subscribers'
     )
-    contentmaker = models.ForeignKey(
-        CustomUser,
+    content_maker = models.ForeignKey(
+        User,
         on_delete=models.CASCADE,
-        related_name='contentmaker'
+        related_name='content_maker'
     )
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['subscriber', 'contentmaker'],
+                fields=['subscriber', 'content_maker'],
                 name='Unique_SubPair'
             )
         ]
@@ -92,13 +101,14 @@ class SubPair(models.Model):
         verbose_name_plural = 'Пары подписок'
 
     def __str__(self) -> str:
-        return self.subscriber + ' подписан на ' + self.contentmaker
+        return f'{self.subscriber} подписан на {self.content_maker}'
 
 
 class Ingredient(models.Model):
     """
     Model of Ingredient.
     """
+
     name = models.CharField(
         max_length=128,
         verbose_name='Название'
@@ -108,18 +118,19 @@ class Ingredient(models.Model):
         verbose_name='Единица измерения'
     )
 
-    class Meta():
+    class Meta:
         verbose_name = 'Ингредиент'
         verbose_name_plural = 'Ингредиенты'
 
     def __str__(self) -> str:
-        return self.name + ' (' + self.measurement_unit + ')'
+        return f'{self.name} ({self.measurement_unit})'
 
 
 class Recipe(models.Model):
     """
     Model of Recipe.
     """
+
     name = models.CharField(
         max_length=256,
         verbose_name='Название'
@@ -130,27 +141,26 @@ class Recipe(models.Model):
     text = models.TextField(
         verbose_name='Описание'
     )
-    cooking_time = models.IntegerField(
+    cooking_time = models.PositiveSmallIntegerField(
         validators=[
             MinValueValidator(
-                limit_value=1,
-                message='Время готовки должно быть больше\
-                     1 минуты. Никакого риса за 59 секунд!'
+                limit_value=int(os.getenv('cooking_time_limit_value')),
+                message=f'''Cooking time must be greater than {
+                    os.getenv('cooking_time_limit_value')
+                } minutes.'''
             )
         ],
         verbose_name='Время приготовления (мин.)'
     )
 
     author = models.ForeignKey(
-        CustomUser,
-        related_name='recipe',
+        User,
         on_delete=models.CASCADE,
         verbose_name='Автор рецепта'
     )
     ingredients = models.ManyToManyField(
         Ingredient,
         through='IngredientInRecipe',
-        related_name='recipe',
         verbose_name='Автор рецепта'
     )
     posting_time = models.DateField(
@@ -158,7 +168,8 @@ class Recipe(models.Model):
         verbose_name='Дата публикации'
     )
 
-    class Meta():
+    class Meta:
+        default_related_name = 'recipes'
         verbose_name = 'Рецепт'
         verbose_name_plural = 'Рецепты'
         ordering = ('-posting_time',)
@@ -171,6 +182,7 @@ class IngredientInRecipe(models.Model):
     """
     Model for storing 'amount' value of Ingredient object In Recipe object.
     """
+
     recipe = models.ForeignKey(
         Recipe,
         on_delete=models.CASCADE,
@@ -186,13 +198,15 @@ class IngredientInRecipe(models.Model):
     amount = models.SmallIntegerField(
         validators=[
             MinValueValidator(
-                limit_value=1,
-                message='Количество едениц игридиента не может быть меньше 1!'
+                limit_value=int(os.getenv('amount_limit_value')),
+                message=f'''The quantity of ingredient units cannot be less than {
+                    os.getenv('amount_limit_value')
+                }!'''
             )
         ],
     )
 
-    class Meta():
+    class Meta:
         verbose_name = 'Ингридиент в рецепте'
         verbose_name_plural = 'Ингридиенты в рецептах'
         constraints = [
@@ -203,7 +217,7 @@ class IngredientInRecipe(models.Model):
         ]
 
     def __str__(self) -> str:
-        return self.ingredient + ' в ' + self.recipe + ' x' + self.amount
+        return f'{self.ingredient} в {self.recipe} x{self.amount}'
 
 
 class AbstractUserRecipe(models.Model):
@@ -212,8 +226,9 @@ class AbstractUserRecipe(models.Model):
     of repeating code for User and Recipe unique pair
     in other classes.
     """
+
     user = models.ForeignKey(
-        CustomUser,
+        User,
         on_delete=models.CASCADE,
         verbose_name='Пользователь'
     )
@@ -223,7 +238,7 @@ class AbstractUserRecipe(models.Model):
         verbose_name='Рецепт'
     )
 
-    class Meta():
+    class Meta:
         abstract = True
         constraints = [
             models.UniqueConstraint(
@@ -237,13 +252,14 @@ class ToBuyList(AbstractUserRecipe):
     """
     Model of ToBuyList inherits from AbstractUserRecipe.
     """
+
     class Meta(AbstractUserRecipe.Meta):
         verbose_name = 'Список покупок'
         verbose_name_plural = 'Списки покупок'
-        default_related_name = 'buylist'
+        default_related_name = 'tobuylists'
 
     def __str__(self) -> str:
-        return 'Список ' + self.user + 'для ' + self.recipes
+        return f'Список {self.user} для {self.recipes}'
 
 
 class Favorite(AbstractUserRecipe):
@@ -254,7 +270,7 @@ class Favorite(AbstractUserRecipe):
     class Meta(AbstractUserRecipe.Meta):
         verbose_name = 'Пара избранное'
         verbose_name_plural = 'Пары избранное'
-        default_related_name = 'fav'
+        default_related_name = 'favorites'
 
     def __str__(self) -> str:
-        return self.user + 'нравится ' + self.recipes
+        return f'{self.user} нравится {self.recipes}'

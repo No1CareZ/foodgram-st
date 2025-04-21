@@ -1,16 +1,24 @@
-from rest_framework import serializers
+import os
+from dotenv import load_dotenv, find_dotenv
+
 from django.contrib.auth import get_user_model
 from drf_extra_fields.fields import Base64ImageField
-from djoser.serializers import UserSerializer
+from djoser.serializers import UserSerializer as BaseUserSerializer
+from rest_framework import serializers
 
-from recipes.models import Ingredient, Recipe, \
+from recipes.models import (
+    Ingredient,
+    Recipe,
     IngredientInRecipe
+)
 
+
+load_dotenv(find_dotenv(filename='config.env'))
 
 User = get_user_model()
 
 
-class CustomUserSerializer(UserSerializer):
+class UserSerializer(BaseUserSerializer):
     """
     Serializer for User model inherited
     from UserSerializer for it simplicity.
@@ -18,14 +26,9 @@ class CustomUserSerializer(UserSerializer):
 
     is_subscribed = serializers.SerializerMethodField('get_is_subscribed')
 
-    class Meta():
+    class Meta:
         model = User
-        fields = (
-            'id',
-            'email',
-            'username',
-            'first_name',
-            'last_name',
+        fields = BaseUserSerializer.Meta.fields + (
             'is_subscribed',
             'avatar',
         )
@@ -34,12 +37,13 @@ class CustomUserSerializer(UserSerializer):
         """
         Field creating function.
         """
+
         user = self.context.get('request').user
 
         return (
             user.is_authenticated
-            and user.subscriber.filter(
-                contentmaker=obj.pk
+            and user.subscribers.filter(
+                content_maker=obj.pk
             ).exists()
         )
 
@@ -49,6 +53,7 @@ class AvatarSerializer(serializers.ModelSerializer):
     Serializer for requests to
     create avatar for user.
     """
+
     avatar = Base64ImageField()
 
     class Meta:
@@ -61,9 +66,7 @@ class IngredientSerializer(serializers.ModelSerializer):
     Serializer for Ingredient model.
     """
 
-    read_only_fields = '__all__'
-
-    class Meta():
+    class Meta:
         model = Ingredient
         fields = (
             'id',
@@ -78,6 +81,7 @@ class IngredientInRecipeSerializer(serializers.ModelSerializer):
     amount from IngredientInRecipe model and will
     be used in RecipeSerializer.
     """
+
     id = serializers.IntegerField(
         source='ingredient.id'
     )
@@ -89,7 +93,7 @@ class IngredientInRecipeSerializer(serializers.ModelSerializer):
     )
     amount = serializers.IntegerField()
 
-    class Meta():
+    class Meta:
         model = IngredientInRecipe
         fields = (
             'id',
@@ -103,7 +107,8 @@ class RecipeSerializer(serializers.ModelSerializer):
     """
     Serializer for Recipe model.
     """
-    author = CustomUserSerializer()
+
+    author = UserSerializer()
     ingredients = IngredientInRecipeSerializer(
         many=True,
         source='recipe_ingredient'
@@ -125,35 +130,53 @@ class RecipeSerializer(serializers.ModelSerializer):
             'cooking_time',
         )
 
-    def get_is_favorited(self, obj):
+    def _get_is_template(self, obj, menage):
         """
-        Field creating function for
-        is_favorited.
+        Reusable fucntion to get fields
+        of user based on menage variable.
         """
         request = self.context.get('request')
         user = request.user
 
         return (
             user.is_authenticated
-            and user.fav.filter(
+            and getattr(user, menage).filter(
                 recipes=obj.pk
             ).exists()
         )
+
+    def get_is_favorited(self, obj):
+        """
+        Field creating function for
+        is_favorited.
+        """
+        return self._get_is_template(obj, 'favorites')
+        # request = self.context.get('request')
+        # user = request.user
+
+        # return (
+        #     user.is_authenticated
+        #     and user.fav.filter(
+        #         recipes=obj.pk
+        #     ).exists()
+        # )
 
     def get_is_in_shopping_cart(self, obj):
         """
         Field creating function for
         is_in_shopping_cart.
         """
-        request = self.context.get('request')
-        user = request.user
 
-        return (
-            user.is_authenticated
-            and request.user.buylist.filter(
-                recipes=obj.pk
-            ).exists()
-        )
+        return self._get_is_template(obj, 'tobuylists')
+        # request = self.context.get('request')
+        # user = request.user
+
+        # return (
+        #     user.is_authenticated
+        #     and request.user.buylist.filter(
+        #         recipes=obj.pk
+        #     ).exists()
+        # )
 
 
 class CutRecipeSerializer(serializers.ModelSerializer):
@@ -163,6 +186,7 @@ class CutRecipeSerializer(serializers.ModelSerializer):
     will be used in short actions like tests in
     Postman.
     """
+
     class Meta:
         model = Recipe
         fields = (
@@ -174,43 +198,40 @@ class CutRecipeSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class SubscriberSerializer(CustomUserSerializer):
+class SubscriberSerializer(UserSerializer):
     """
     Serializer for subscriber-user pair.
     """
+
     recipes = serializers.SerializerMethodField(
         method_name='get_recipes'
     )
     recipes_count = serializers.IntegerField(
-        source='recipe.count'
+        source='recipes.count'
     )
-    is_subscribed = serializers.SerializerMethodField()
 
-    class Meta:
+    class Meta(UserSerializer.Meta):
         model = User
-        fields = (
-            'id',
-            'email',
-            'username',
-            'first_name',
-            'last_name',
+        fields = UserSerializer.Meta.fields + (
             'recipes',
             'recipes_count',
-            'avatar',
-            'is_subscribed'
         )
 
     def get_recipes(self, obj):
         """
         Getting recipes field.
         """
-        queryset = obj.recipe.all()
+
+        queryset = obj.recipes.all()
         request = self.context.get('request')
         recipes_limit = request.GET.get('recipes_limit')
         if recipes_limit:
-            queryset = queryset[
-                :int(recipes_limit)
-            ]
+            try:
+                queryset = queryset[
+                    :int(recipes_limit)
+                ]
+            except ValueError:
+                pass
 
         return CutRecipeSerializer(
             queryset,
@@ -222,12 +243,13 @@ class SubscriberSerializer(CustomUserSerializer):
         """
         Getting is_subscribed field.
         """
+
         user = self.context.get('request').user
 
         return (
             user.is_authenticated
-            and user.subscriber.filter(
-                contentmaker=obj.pk
+            and user.subscribers.filter(
+                content_maker=obj.pk
             ).exists()
         )
 
@@ -237,15 +259,16 @@ class CreateIngredientSerializer(serializers.Serializer):
     Serilizer for Ingredient creation.
     Will be used in other serilizers.
     """
+
     id = serializers.PrimaryKeyRelatedField(
         queryset=Ingredient.objects.all(),
         source='ingredient'
     )
     amount = serializers.IntegerField(
-        min_value=1
+        min_value=int(os.getenv('amount_limit_value'))
     )
 
-    class Meta():
+    class Meta:
         model = Ingredient
         fields = (
             "id",
@@ -259,15 +282,16 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
     inherits from CreateIngredientSerializer
     to serialize ingredient.
     """
+
     ingredients = CreateIngredientSerializer(
         many=True
     )
     image = Base64ImageField()
     cooking_time = serializers.IntegerField(
-        min_value=1
+        min_value=int(os.getenv('cooking_time_limit_value'))
     )
 
-    class Meta():
+    class Meta:
         model = Recipe
         fields = (
             "name",
@@ -281,12 +305,13 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         """
         Ingredients validation.
         """
+
         ingredients = data.get("ingredients")
 
         if not ingredients:
             raise serializers.ValidationError(
                 {
-                    "ingredients": "Обязательное поле"
+                    "ingredients": "Required field"
                 }
             )
 
@@ -297,7 +322,7 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         if len(ingredients_ids) != len(set(ingredients_ids)):
             raise serializers.ValidationError(
                 {
-                    "ingredients": "Ингредиенты не должны повторяться!"
+                    "ingredients": "Ingredients should not repeat!"
                 }
             )
 
@@ -307,10 +332,11 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         """
         Image validation.
         """
+
         if not value:
             raise serializers.ValidationError(
                 {
-                    "image": "Обязательное поле"
+                    "image": "Required field"
                 }
             )
 
@@ -321,8 +347,11 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         Owerwriting default create inoreder
         to work only with validated data.
         """
+
         ingredients = validated_data.pop("ingredients")
-        recipe = super().create(validated_data)
+        author = self.context['request'].user
+        recipe = Recipe.objects.create(author=author, **validated_data)
+        # recipe = super().create(validated_data)
         self.create_ingredients(ingredients, recipe)
 
         return recipe
@@ -331,6 +360,7 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         """
         Owerwriting default update.
         """
+
         IngredientInRecipe.objects.filter(recipe=instance).delete()
         self.create_ingredients(validated_data.pop("ingredients"), instance)
 
@@ -340,6 +370,7 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         """
         Create ingredents.
         """
+
         IngredientInRecipe.objects.bulk_create(
             IngredientInRecipe(
                 ingredient_id=ingredient["ingredient"].id,
