@@ -1,19 +1,9 @@
-import os
-from dotenv import load_dotenv, find_dotenv
-
 from django.contrib.auth import get_user_model
-from drf_extra_fields.fields import Base64ImageField
 from djoser.serializers import UserSerializer as BaseUserSerializer
+from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
 
-from recipes.models import (
-    Ingredient,
-    Recipe,
-    IngredientInRecipe
-)
-
-
-load_dotenv(find_dotenv(filename='config.env'))
+from recipes.models import Ingredient, IngredientInRecipe, Recipe
 
 User = get_user_model()
 
@@ -158,7 +148,7 @@ class RecipeSerializer(serializers.ModelSerializer):
         is_in_shopping_cart.
         """
 
-        return self._get_is_template(obj, 'tobuylists')
+        return self._get_is_template(obj, 'to_buy_lists')
 
 
 class CutRecipeSerializer(serializers.ModelSerializer):
@@ -236,22 +226,21 @@ class SubscriberSerializer(UserSerializer):
         )
 
 
-class CreateIngredientSerializer(serializers.Serializer):
+class CreateIngredientSerializer(serializers.ModelSerializer):
     """
     Serilizer for Ingredient creation.
     Will be used in other serilizers.
     """
 
+    # Inheritance of Validation will do the most of the work
+
     id = serializers.PrimaryKeyRelatedField(
         queryset=Ingredient.objects.all(),
         source='ingredient'
     )
-    amount = serializers.IntegerField(
-        min_value=int(os.getenv('amount_limit_value'))
-    )
 
     class Meta:
-        model = Ingredient
+        model = IngredientInRecipe
         fields = (
             "id",
             "amount"
@@ -269,9 +258,6 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         many=True
     )
     image = Base64ImageField()
-    cooking_time = serializers.IntegerField(
-        min_value=int(os.getenv('cooking_time_limit_value'))
-    )
 
     class Meta:
         model = Recipe

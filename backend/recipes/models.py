@@ -1,13 +1,8 @@
-import os
-
 from django.contrib.auth.models import AbstractUser
-from django.core.validators import RegexValidator, MinValueValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 
-from dotenv import load_dotenv, find_dotenv
-
-
-load_dotenv(find_dotenv(filename='config.env'))
+import constant
 
 
 class User(AbstractUser):
@@ -23,10 +18,10 @@ class User(AbstractUser):
         unique=True
     )
     username = models.CharField(
-        max_length=int(os.getenv('username_max_length')),
+        max_length=constant.USERNAME_MAX_LENGTH,
         validators=[
             RegexValidator(
-                regex=os.getenv('username_validator_regex'),
+                regex=constant.USERNAME_VALIDATOR_REGEX,
                 message='Username must follow the rules!'
             )
         ],
@@ -34,11 +29,11 @@ class User(AbstractUser):
         verbose_name='Никнейм'
     )
     first_name = models.CharField(
-        max_length=int(os.getenv('fname_max_length')),
+        max_length=constant.FNAME_MAX_LENGTH,
         verbose_name='Имя'
     )
     last_name = models.CharField(
-        max_length=int(os.getenv('lname_max_length')),
+        max_length=constant.LNAME_MAX_LENGTH,
         verbose_name='Фамилия'
     )
     avatar = models.ImageField(
@@ -94,11 +89,11 @@ class Ingredient(models.Model):
     """
 
     name = models.CharField(
-        max_length=128,
+        max_length=constant.INGREDIENT_MAX_NAME,
         verbose_name='Название'
     )
     measurement_unit = models.CharField(
-        max_length=64,
+        max_length=constant.INGREDIENT_MAX_MU,
         verbose_name='Единица измерения'
     )
 
@@ -116,7 +111,7 @@ class Recipe(models.Model):
     """
 
     name = models.CharField(
-        max_length=256,
+        max_length=constant.RECIPE_MAX_NAME,
         verbose_name='Название'
     )
     image = models.ImageField(
@@ -128,9 +123,9 @@ class Recipe(models.Model):
     cooking_time = models.PositiveSmallIntegerField(
         validators=[
             MinValueValidator(
-                limit_value=int(os.getenv('cooking_time_limit_value')),
+                limit_value=constant.RECIPE_COOKING_TIME_LIMIT_VALUE,
                 message=f'''Cooking time must be greater than {
-                    os.getenv('cooking_time_limit_value')
+                    constant.RECIPE_COOKING_TIME_LIMIT_VALUE
                 } minutes.'''
             )
         ],
@@ -172,19 +167,18 @@ class IngredientInRecipe(models.Model):
         on_delete=models.CASCADE,
         related_name='recipe_ingredient',
         verbose_name='Рецепт'
-
     )
     ingredient = models.ForeignKey(
         Ingredient,
         on_delete=models.CASCADE,
         verbose_name='Ингридиент'
     )
-    amount = models.SmallIntegerField(
+    amount = models.PositiveSmallIntegerField(
         validators=[
             MinValueValidator(
-                limit_value=int(os.getenv('amount_limit_value')),
-                message=f'''The quantity of ingredient units cannot be less than {
-                    os.getenv('amount_limit_value')
+                limit_value=constant.ING_IN_REC_AMOUNT_LIMIT_VALUE,
+                message=f'''The quantity of ingredient cannot be less than {
+                    constant.ING_IN_REC_AMOUNT_LIMIT_VALUE
                 }!'''
             )
         ],
@@ -240,7 +234,7 @@ class ToBuyList(AbstractUserRecipe):
     class Meta(AbstractUserRecipe.Meta):
         verbose_name = 'Список покупок'
         verbose_name_plural = 'Списки покупок'
-        default_related_name = 'tobuylists'
+        default_related_name = 'to_buy_lists'
 
     def __str__(self) -> str:
         return f'Список {self.user} для {self.recipes}'

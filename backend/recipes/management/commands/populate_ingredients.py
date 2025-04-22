@@ -1,14 +1,11 @@
-import os
 import json
-from tqdm import tqdm
-from dotenv import load_dotenv, find_dotenv
+
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from tqdm import tqdm
 
+import constant
 from recipes.models import Ingredient
-
-
-load_dotenv(find_dotenv())
 
 
 class Command(BaseCommand):
@@ -21,7 +18,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         file_name = options['json_file']
         try:
-            path = settings.BASE_DIR / os.getenv('data_copy_path') / file_name
+            path = settings.BASE_DIR / constant.DATA_COPY_PATH / file_name
             with open(path, encoding='utf-8') as file:
                 ingredients = json.load(file)
                 for ingredient in tqdm(

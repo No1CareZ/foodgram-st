@@ -1,43 +1,24 @@
-import io
 import datetime
+import io
 
-from django.http import FileResponse
-from django.db.models import Sum
 from django.contrib.auth import get_user_model
+from django.db.models import Sum
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404, reverse
 from django_filters import rest_framework
-from rest_framework import filters, viewsets, permissions, status
-from rest_framework.permissions import SAFE_METHODS, IsAuthenticatedOrReadOnly
-from rest_framework.response import Response
+from djoser import views
+from rest_framework import filters, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import SAFE_METHODS, IsAuthenticatedOrReadOnly
+from rest_framework.response import Response
 
-from djoser import views
-
-from recipes.models import Ingredient
-from recipes.models import (
-    SubPair,
-    Recipe,
-    ToBuyList,
-    Favorite
-)
-
-from .serializers import (
-    IngredientSerializer,
-    AvatarSerializer,
-    SubscriberSerializer,
-    CreateRecipeSerializer,
-    RecipeSerializer,
-    CutRecipeSerializer
-)
-
-from .filters import (
-    RecipeFilter,
-    IngredientFilter
-)
-
-from .permissions import IsAuthorOrReadOnlyPermission
-
+from api.filters import IngredientFilter, RecipeFilter
+from api.permissions import IsAuthorOrReadOnlyPermission
+from api.serializers import (AvatarSerializer, CreateRecipeSerializer,
+                             CutRecipeSerializer, IngredientSerializer,
+                             RecipeSerializer, SubscriberSerializer)
+from recipes.models import Favorite, Ingredient, Recipe, SubPair, ToBuyList
 
 User = get_user_model()
 
@@ -47,7 +28,7 @@ class UserViewSet(views.UserViewSet):
     CRUD allowing viewset for User.
     """
 
-    permission_classes = (IsAuthorOrReadOnlyPermission, )
+    permission_classes = (IsAuthorOrReadOnlyPermission,)
 
     page_size_query_param = ('limit',)
 
@@ -63,27 +44,25 @@ class UserViewSet(views.UserViewSet):
         """
         Avatar connected actions.
         """
+
         user = request.user
         if request.method == 'PUT':
-            if request.data.get('avatar'):
-                serializer = AvatarSerializer(
-                    user,
-                    data=request.data,
-                    partial=True
-                )
-                if serializer.is_valid():
-                    serializer.save()
-                    return Response(
-                        serializer.data,
-                        status=status.HTTP_200_OK
-                    )
+            if not request.data.get('avatar'):
                 return Response(
-                    serializer.errors,
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            return Response(
-                status=status.HTTP_400_BAD_REQUEST
+            serializer = AvatarSerializer(
+                user,
+                data=request.data,
+                partial=True
             )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK
+            )
+
         user.avatar.delete(save=True)
         user.avatar = None
         user.save()
@@ -113,9 +92,9 @@ class UserViewSet(views.UserViewSet):
         """
         Get subscribed pages.
         """
-        targets = request.user.subscribers.values('content_maker')
+
         queryset = self.get_queryset().filter(
-            id__in=targets
+            subscribers__subscriber=request.user
         )
         pages = self.paginate_queryset(queryset)
         serializer = SubscriberSerializer(
@@ -134,6 +113,7 @@ class UserViewSet(views.UserViewSet):
         """
         Subscribe/Unsubscribe.
         """
+
         user = request.user
         author = get_object_or_404(User, id=id)
         subscription = SubPair.objects.filter(
@@ -161,10 +141,11 @@ class UserViewSet(views.UserViewSet):
                 serializer.data,
                 status=status.HTTP_201_CREATED
             )
-        subpairsearch = SubPair.objects.all()\
-            .filter(subscriber=user)\
+        subpairsearch = (
+            SubPair.objects.all()
+            .filter(subscriber=user)
             .filter(content_maker=author)
-
+        )
         if subpairsearch:
             subpairsearch[0].delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
@@ -190,8 +171,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action not in SAFE_METHODS:
             return CreateRecipeSerializer
-        else:
-            return RecipeSerializer
+        return RecipeSerializer
 
     def actions_recipe(self, request, pk, model, error_message):
         recipe = get_object_or_404(
@@ -341,6 +321,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """
         Return short link for recipe.
         """
+
         get_object_or_404(Recipe, pk=pk)
         short_link = request.build_absolute_uri(
             reverse(
@@ -355,6 +336,7 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     """
     CRUD allowing viewset for Ingridents.
     """
+
     permission_classes = (permissions.AllowAny,)
 
     queryset = Ingredient.objects.all()

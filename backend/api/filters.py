@@ -1,6 +1,6 @@
 from django_filters import rest_framework as filters
 
-from recipes.models import Recipe, Ingredient
+from recipes.models import Ingredient, Recipe
 
 
 class RecipeFilter(filters.FilterSet):
@@ -21,7 +21,7 @@ class RecipeFilter(filters.FilterSet):
 
     def filter_is_in_shopping_cart(self, queryset, _, value):
         if value and self.request.user.is_authenticated:
-            return queryset.filter(tobuylists__user=self.request.user)
+            return queryset.filter(to_buy_lists__user=self.request.user)
         return queryset
 
     class Meta:
